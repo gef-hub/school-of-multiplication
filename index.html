@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Fish Groups – Catch & Multiply!</title>
+<style>
+  :root{
+    --ink:#123a5a;
+    --sand:#f4d79b;
+    --sand-dark:#d9b46a;
+    --gold:#ffd23f;
+    --good:#2ecc71;
+    --bad:#ff5a5a;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;height:100%;overflow:hidden;
+    font-family:"Avenir Next Rounded","Avenir Next","Trebuchet MS",system-ui,sans-serif;
+    color:var(--ink);
+    background:linear-gradient(180deg,#c9f0ff 0%,#8fd8f7 100%);
+    -webkit-user-select:none;user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+    -webkit-touch-callout:none;
+  }
+  #app{
+    position:relative;
+    display:flex;flex-direction:column;gap:12px;
+    height:100vh;height:100dvh;
+    padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  }
+
+  /* ---------- Top: task sentence ---------- */
+  #task{
+    background:#fff;border-radius:22px;
+    padding:14px 18px;text-align:center;
+    box-shadow:0 6px 0 rgba(18,58,90,.15);
+    font-weight:800;
+    font-size:clamp(24px,4.4vw,48px);
+    line-height:1.15;
+  }
+  #task .num{
+    display:inline-block;min-width:1.3em;
+    padding:0 .18em;margin:0 .05em;
+    border-radius:.3em;
+    background:var(--gold);color:#5a3b00;
+  }
+  #task .num.y{background:#ff9f68;color:#5a1f00}
+  #hud{
+    display:flex;justify-content:space-between;align-items:center;
+    font-weight:700;font-size:clamp(15px,2.1vw,22px);
+    padding:0 6px;
+  }
+  #hud .pill{background:rgba(255,255,255,.75);padding:6px 14px;border-radius:999px}
+  #muteBtn{border:none;background:rgba(255,255,255,.75);border-radius:999px;font-size:inherit;padding:6px 12px;cursor:pointer}
+
+  /* ---------- Middle: pond + timer ---------- */
+  #middle{flex:1;display:flex;gap:12px;min-height:0}
+  #pond{
+    position:relative;flex:1;min-width:0;
+    border-radius:34px;overflow:hidden;
+    border:8px solid var(--sand);
+    box-shadow:0 0 0 4px var(--sand-dark), inset 0 0 50px rgba(0,40,90,.35);
+    background:
+      radial-gradient(ellipse at 30% 25%,rgba(255,255,255,.35) 0,transparent 40%),
+      radial-gradient(ellipse at 75% 80%,rgba(0,60,120,.25) 0,transparent 50%),
+      linear-gradient(180deg,#4fc3f7 0%,#1e88e5 60%,#1565c0 100%);
+  }
+  .bubble{
+    position:absolute;bottom:-30px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);
+    pointer-events:none;animation:rise linear infinite;
+  }
+  @keyframes rise{
+    0%{transform:translateY(0) translateX(0);opacity:0}
+    10%{opacity:1}
+    50%{transform:translateY(-55vh) translateX(12px)}
+    100%{transform:translateY(-110vh) translateX(-8px);opacity:0}
+  }
+
+  .group{
+    position:absolute;border-radius:50%;
+    border:4px dashed rgba(255,255,255,.75);
+    background:rgba(255,255,255,.13);
+    cursor:pointer;
+    transition:transform .15s ease, border-color .15s, background .15s, box-shadow .15s;
+  }
+  .group:active{transform:scale(.96)}
+  .group.selected{
+    border:6px solid var(--gold);
+    background:rgba(255,210,63,.22);
+    box-shadow:0 0 0 6px rgba(255,210,63,.35),0 0 24px rgba(255,210,63,.6);
+    transform:scale(1.05);
+  }
+  .group.selected::after{ /* fishing net */
+    content:"";position:absolute;inset:0;border-radius:50%;pointer-events:none;
+    background:
+      repeating-linear-gradient(45deg,rgba(255,255,255,.28) 0 2px,transparent 2px 14px),
+      repeating-linear-gradient(-45deg,rgba(255,255,255,.28) 0 2px,transparent 2px 14px);
+  }
+  .group.show-correct{border:6px solid var(--good);box-shadow:0 0 0 6px rgba(46,204,113,.35),0 0 24px rgba(46,204,113,.7)}
+  .group.show-wrong{border:6px solid var(--bad);background:rgba(255,90,90,.25);box-shadow:0 0 0 6px rgba(255,90,90,.35)}
+  .group.locked{pointer-events:none}
+
+  .fish{position:absolute;transform:translate(-50%,-50%);pointer-events:none}
+  .fish svg{display:block;width:100%;height:auto;animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{
+    0%,100%{transform:translateY(0) rotate(0deg)}
+    50%{transform:translateY(-6%) rotate(-4deg)}
+  }
+
+  #toast{
+    position:absolute;left:50%;top:50%;
+    transform:translate(-50%,-50%) scale(.6);opacity:0;
+    background:#fff;border-radius:26px;padding:18px 28px;
+    text-align:center;font-weight:800;
+    font-size:clamp(22px,3.8vw,40px);
+    box-shadow:0 10px 0 rgba(0,0,0,.15);
+    pointer-events:none;transition:transform .25s cubic-bezier(.2,1.6,.4,1),opacity .2s;
+    max-width:88%;z-index:5;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  #toast.good{border:6px solid var(--good)}
+  #toast.bad{border:6px solid var(--bad)}
+  #toast small{display:block;font-size:.6em;font-weight:700;margin-top:6px;color:#3b5b78}
+
+  #timer{
+    width:clamp(46px,6vw,64px);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+  }
+  #timeNum{
+    font-weight:800;font-size:clamp(20px,3vw,30px);
+    background:#fff;border-radius:14px;width:100%;text-align:center;padding:4px 0;
+  }
+  #barWrap{
+    position:relative;flex:1;width:100%;
+    background:rgba(255,255,255,.7);
+    border-radius:999px;overflow:hidden;
+    border:4px solid #fff;box-shadow:inset 0 2px 6px rgba(0,0,0,.15);
+  }
+  #barFill{
+    position:absolute;left:0;right:0;bottom:0;height:100%;
+    background:hsl(120,70%,48%);border-radius:999px;
+  }
+  #timer.hurry #barWrap{animation:pulse .5s ease-in-out infinite alternate}
+  @keyframes pulse{from{box-shadow:0 0 0 0 rgba(255,90,90,.0)}to{box-shadow:0 0 0 6px rgba(255,90,90,.6)}}
+  .clock{font-size:clamp(22px,3vw,30px)}
+
+  /* ---------- Bottom ---------- */
+  #bottom{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  #caught{font-weight:700;font-size:clamp(17px,2.4vw,26px);background:rgba(255,255,255,.75);padding:10px 18px;border-radius:999px}
+  .btn{
+    border:none;cursor:pointer;font-family:inherit;font-weight:800;
+    font-size:clamp(22px,3.2vw,34px);
+    padding:14px 36px;border-radius:999px;
+    background:#ff7a3d;color:#fff;
+    box-shadow:0 7px 0 #c4501c;
+    transition:transform .08s, box-shadow .08s, opacity .2s;
+  }
+  .btn:active{transform:translateY(5px);box-shadow:0 2px 0 #c4501c}
+  .btn:disabled{opacity:.45;pointer-events:none}
+  .btn.green{background:#27ae60;box-shadow:0 7px 0 #1b7a43}
+  .btn.green:active{box-shadow:0 2px 0 #1b7a43}
+
+  /* ---------- Whirlpool + flying groups ---------- */
+  #drain{
+    position:fixed;z-index:15;pointer-events:none;
+    right:max(10px,env(safe-area-inset-right));
+    bottom:max(10px,env(safe-area-inset-bottom));
+    width:clamp(110px,14vw,160px);height:clamp(110px,14vw,160px);
+    opacity:0;transform:scale(.2);
+    transition:opacity .25s, transform .35s cubic-bezier(.2,1.5,.4,1);
+  }
+  #drain.show{opacity:1;transform:scale(1)}
+  #drain svg{width:100%;height:100%;animation:spin 1s linear infinite}
+  #drain.gulp svg{animation:spin .4s linear infinite}
+  @keyframes spin{to{transform:rotate(-360deg)}}
+  .flying{position:fixed !important;z-index:16;margin:0;pointer-events:none}
+
+  /* ---------- Overlays ---------- */
+  .overlay{
+    position:absolute;inset:0;z-index:20;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(18,58,90,.55);
+    padding:20px;
+  }
+  .overlay.hidden{display:none}
+  .card{
+    background:#fff;border-radius:34px;padding:30px 34px;
+    text-align:center;max-width:640px;width:100%;
+    box-shadow:0 14px 0 rgba(0,0,0,.18);
+  }
+  .card h1{margin:0 0 6px;font-size:clamp(34px,6vw,58px)}
+  .card p{font-size:clamp(18px,2.6vw,26px);margin:10px 0 22px;line-height:1.35}
+  .card .big-fish{width:min(40%,180px);margin:4px auto 0}
+  #stars{font-size:clamp(56px,11vw,110px);letter-spacing:.08em;margin:6px 0}
+  #stars span{display:inline-block;opacity:0;transform:scale(.2) rotate(-40deg)}
+  #stars span.pop{animation:starPop .5s cubic-bezier(.2,1.6,.4,1) forwards}
+  #stars span.off{filter:grayscale(1);opacity:.25}
+  @keyframes starPop{to{opacity:1;transform:scale(1) rotate(0)}}
+  #stars span.off.pop{animation:starPopOff .5s ease forwards}
+  @keyframes starPopOff{to{opacity:.25;transform:scale(1) rotate(0)}}
+  #roundDots{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-bottom:22px}
+  #roundDots div{
+    width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;color:#fff;font-size:20px;
+  }
+  .dot-good{background:var(--good)}
+  .dot-bad{background:var(--bad)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="task">Catch <span class="num">?</span> groups of <span class="num y">?</span> fishes!</div>
+
+  <div id="hud">
+    <span class="pill" id="roundLabel">Round 1 / 10</span>
+    <span class="pill" id="scoreLabel">⭐ Correct: 0</span>
+    <button id="muteBtn" aria-label="Sound on/off">🔊</button>
+  </div>
+
+  <div id="middle">
+    <div id="pond">
+      <div id="toast"></div>
+    </div>
+    <div id="timer">
+      <div class="clock">⏱️</div>
+      <div id="timeNum">15</div>
+      <div id="barWrap"><div id="barFill"></div></div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div id="caught">Caught: 0 groups</div>
+    <button class="btn" id="catchBtn" disabled>Catch! 🎣</button>
+  </div>
+
+  <!-- Whirlpool the caught fish get sucked into -->
+  <div id="drain" aria-hidden="true">
+    <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="wg" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#062a55"/>
+          <stop offset="55%" stop-color="#1565c0"/>
+          <stop offset="100%" stop-color="#4fc3f7" stop-opacity=".9"/>
+        </radialGradient>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="url(#wg)" stroke="#fff" stroke-width="3"/>
+      <g fill="none" stroke="#fff" stroke-linecap="round" opacity=".85">
+        <path d="M50 8 A42 42 0 0 1 92 50" stroke-width="5"/>
+        <path d="M50 92 A42 42 0 0 1 8 50" stroke-width="5"/>
+        <path d="M78 50 A28 28 0 0 1 50 78" stroke-width="4"/>
+        <path d="M22 50 A28 28 0 0 1 50 22" stroke-width="4"/>
+        <path d="M50 36 A14 14 0 0 1 64 50" stroke-width="3"/>
+        <path d="M50 64 A14 14 0 0 1 36 50" stroke-width="3"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Start screen -->
+  <div class="overlay" id="startScreen">
+    <div class="card">
+      <div class="big-fish" id="startFish"></div>
+      <h1>Fish Groups</h1>
+      <p>Read the sentence at the top.<br>
+         Tap the groups of fishes to catch them in your net,<br>
+         then press <b>Catch!</b><br>
+         You have <b>15 seconds</b> each round. There are <b>10 rounds</b>.</p>
+      <button class="btn green" id="startBtn">Start ▶</button>
+    </div>
+  </div>
+
+  <!-- Result screen -->
+  <div class="overlay hidden" id="endScreen">
+    <div class="card">
+      <h1 id="endTitle">Well done!</h1>
+      <div id="stars"></div>
+      <p id="endText"></p>
+      <div id="roundDots"></div>
+      <button class="btn green" id="againBtn">Play Again 🔁</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Settings ----------
+  const ROUNDS = 10;
+  const TIME_LIMIT = 15;          // seconds per round
+  const MAX_GROUPS = 11;          // pond has 12 cells
+  const COLORS = [
+    ["#ff8a3d","#c4501c"], ["#ff5d8f","#b8325e"], ["#ffd23f","#c99a00"],
+    ["#9b8cff","#5e4fd1"], ["#3ddc97","#1f9a64"], ["#ff6b6b","#b83737"],
+    ["#4dd6ff","#1a8fb8"], ["#ffa6e0","#c45aa0"], ["#b7f05a","#6ea320"]
+  ];
+
+  // ---------- Elements ----------
+  const $ = id => document.getElementById(id);
+  const pond = $("pond"), toast = $("toast"), taskEl = $("task");
+  const roundLabel = $("roundLabel"), scoreLabel = $("scoreLabel");
+  const caughtEl = $("caught"), catchBtn = $("catchBtn");
+  const timerEl = $("timer"), timeNum = $("timeNum"), barFill = $("barFill");
+  const startScreen = $("startScreen"), endScreen = $("endScreen");
+
+  // ---------- State ----------
+  let round = 0, score = 0, results = [];
+  let x = 2, y = 2;
+  let groups = [];                 // {el, size, cell, jx, jy}
+  let phase = "idle";              // idle | play | feedback
+  let roundStart = 0, rafId = 0, nextTimeout = 0;
+
+  // ---------- Helpers ----------
+  const rand = (a, b) => Math.floor(Math.random() * (b - a + 1)) + a;
+  const shuffle = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  const plural = (n, word) => n + " " + word + (n === 1 ? "" : (word === "fish" ? "es" : "s"));
+
+  function fishSVG(color, dark, flip) {
+    const t = flip ? 'transform="translate(100,0) scale(-1,1)"' : "";
+    return `<svg viewBox="0 0 100 64" xmlns="http://www.w3.org/2000/svg"><g ${t}>
+      <path d="M76 34 L98 14 Q92 34 98 54 Z" fill="${dark}"/>
+      <path d="M34 16 Q48 2 62 16 Z" fill="${dark}"/>
+      <path d="M44 50 Q52 62 58 50 Z" fill="${dark}"/>
+      <ellipse cx="44" cy="34" rx="36" ry="21" fill="${color}" stroke="${dark}" stroke-width="2.5"/>
+      <path d="M38 20 Q48 34 38 48" stroke="${dark}" stroke-width="2.5" fill="none" opacity=".6"/>
+      <ellipse cx="52" cy="27" rx="10" ry="4" fill="#fff" opacity=".35"/>
+      <circle cx="22" cy="29" r="6.5" fill="#fff"/><circle cx="20" cy="29" r="3.4" fill="#1b1b2f"/>
+      <path d="M10 39 Q14 42 18 39" stroke="${dark}" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </g></svg>`;
+  }
+
+  // Fish positions inside a group circle (as fractions of the circle radius) + fish width (fraction of diameter)
+  function fishLayout(n) {
+    switch (n) {
+      case 1: return { w: .58, pts: [[0, 0]] };
+      case 2: return { w: .42, pts: [[0, -.34], [0, .34]] };
+      case 3: return { w: .38, pts: [[0, -.44], [-.42, .3], [.42, .3]] };
+      case 4: return { w: .36, pts: [[-.38, -.36], [.38, -.36], [-.38, .36], [.38, .36]] };
+      default: { // 5: pentagon
+        const pts = [];
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI / 2 + i * 2 * Math.PI / 5;
+          pts.push([Math.cos(a) * .5, Math.sin(a) * .5]);
+        }
+        return { w: .32, pts };
+      }
+    }
+  }
+
+  // ---------- Sound (Web Audio, no files needed) ----------
+  let actx = null, muted = false;
+  function initAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (actx && actx.state === "suspended") actx.resume();
+  }
+  function tone(freq, dur, type = "sine", delay = 0, vol = .18) {
+    if (!actx || muted) return;
+    const t = actx.currentTime + delay;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(t); o.stop(t + dur + .02);
+  }
+  function sweep(from, to, dur, vol = .14) {
+    if (!actx || muted) return;
+    const t = actx.currentTime;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(from, t);
+    o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(t); o.stop(t + dur + .02);
+  }
+  const sfx = {
+    tap: () => tone(660, .08, "triangle", 0, .12),
+    untap: () => tone(440, .08, "triangle", 0, .1),
+    good: () => { tone(523, .15, "triangle"); tone(659, .15, "triangle", .12); tone(784, .3, "triangle", .24); },
+    bad: () => { tone(220, .25, "sawtooth", 0, .1); tone(165, .35, "sawtooth", .18, .1); },
+    tick: () => tone(1000, .05, "square", 0, .05),
+    suck: () => sweep(900, 120, 1.1),
+    pop: () => sweep(150, 700, .45),
+    win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, .25, "triangle", i * .14))
+  };
+  $("muteBtn").addEventListener("click", () => {
+    muted = !muted; $("muteBtn").textContent = muted ? "🔇" : "🔊";
+  });
+
+  // ---------- Decorative bubbles ----------
+  for (let i = 0; i < 9; i++) {
+    const b = document.createElement("div");
+    b.className = "bubble";
+    const s = rand(8, 22);
+    b.style.width = b.style.height = s + "px";
+    b.style.left = rand(2, 96) + "%";
+    b.style.animationDuration = rand(7, 14) + "s";
+    b.style.animationDelay = -rand(0, 14) + "s";
+    pond.appendChild(b);
+  }
+  $("startFish").innerHTML = fishSVG("#ff8a3d", "#c4501c", false);
+
+  // ---------- Round setup ----------
+  function makeRound() {
+    x = rand(2, 5);                 // 1 < x < 6
+    y = rand(2, 4);                 // 1 < y < 5
+
+    const correctGroups = x + rand(1, 2);           // a few spare correct groups
+    const distractors = Math.min(rand(3, 5), MAX_GROUPS - correctGroups);
+
+    // Distractor sizes: mostly "neighbour" sizes (y-1, y+1) to make kids count carefully
+    const pool = [];
+    for (let s = 1; s <= 5; s++) {
+      if (s === y) continue;
+      const weight = Math.abs(s - y) === 1 ? 3 : 1;
+      for (let k = 0; k < weight; k++) pool.push(s);
+    }
+    const sizes = Array(correctGroups).fill(y);
+    for (let i = 0; i < distractors; i++) sizes.push(pool[rand(0, pool.length - 1)]);
+    shuffle(sizes);
+
+    const cells = shuffle([...Array(12).keys()]);
+    const colors = shuffle(COLORS.slice());
+
+    // Clear old groups
+    groups.forEach(g => { g.el.remove(); if (g.clone) g.clone.remove(); });
+    groups = [];
+
+    sizes.forEach((size, i) => {
+      const el = document.createElement("div");
+      el.className = "group";
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", "Group of " + plural(size, "fish"));
+      const [col, dark] = colors[i % colors.length];
+      const lay = fishLayout(size);
+      lay.pts.forEach(([px, py]) => {
+        const f = document.createElement("div");
+        f.className = "fish";
+        f.style.width = (lay.w * 100) + "%";
+        f.style.left = (50 + px * 50) + "%";
+        f.style.top = (50 + py * 50) + "%";
+        f.innerHTML = fishSVG(col, dark, Math.random() < .5);
+        f.firstChild.style.animationDelay = (-Math.random() * 2.4) + "s";
+        el.appendChild(f);
+      });
+      const g = { el, size, cell: cells[i], jx: Math.random() * 2 - 1, jy: Math.random() * 2 - 1, selected: false };
+      el.addEventListener("click", () => toggle(g));
+      pond.appendChild(el);
+      groups.push(g);
+    });
+    layout();
+  }
+
+  function layout() {
+    const W = pond.clientWidth, H = pond.clientHeight;
+    const landscape = W >= H;
+    const cols = landscape ? 4 : 3, rows = landscape ? 3 : 4;
+    const pad = 8;
+    const cw = (W - pad * 2) / cols, ch = (H - pad * 2) / rows;
+    const d = Math.min(cw, ch) * .86;
+    groups.forEach(g => {
+      const c = g.cell % cols, r = Math.floor(g.cell / cols);
+      const cx = pad + cw * (c + .5) + g.jx * (cw - d) / 2 * .9;
+      const cy = pad + ch * (r + .5) + g.jy * (ch - d) / 2 * .9;
+      Object.assign(g.el.style, { width: d + "px", height: d + "px", left: (cx - d / 2) + "px", top: (cy - d / 2) + "px" });
+    });
+  }
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", () => setTimeout(layout, 250));
+
+  // ---------- Interaction ----------
+  function toggle(g) {
+    if (phase !== "play") return;
+    g.selected = !g.selected;
+    g.el.classList.toggle("selected", g.selected);
+    g.selected ? sfx.tap() : sfx.untap();
+    updateCaught();
+  }
+  function selectedGroups() { return groups.filter(g => g.selected); }
+  function updateCaught() {
+    const n = selectedGroups().length;
+    caughtEl.textContent = "Caught: " + plural(n, "group");
+    catchBtn.disabled = n === 0 || phase !== "play";
+  }
+
+  catchBtn.addEventListener("click", () => { if (phase === "play") finishRound(false); });
+
+  // ---------- Timer ----------
+  let lastWhole = TIME_LIMIT;
+  function tick(now) {
+    if (phase !== "play") return;
+    const elapsed = (now - roundStart) / 1000;
+    const remain = Math.max(0, TIME_LIMIT - elapsed);
+    const frac = remain / TIME_LIMIT;
+    barFill.style.height = (frac * 100) + "%";
+    barFill.style.background = `hsl(${Math.round(frac * 120)},75%,48%)`;
+    const whole = Math.ceil(remain);
+    timeNum.textContent = whole;
+    timerEl.classList.toggle("hurry", remain <= 5);
+    if (whole !== lastWhole) { if (whole <= 5 && whole > 0) sfx.tick(); lastWhole = whole; }
+    if (remain <= 0) { finishRound(true); return; }
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ---------- Round flow ----------
+  function startRound() {
+    round++;
+    roundLabel.textContent = `Round ${round} / ${ROUNDS}`;
+    makeRound();
+    taskEl.innerHTML = `Catch <span class="num">${x}</span> groups of <span class="num y">${y}</span> fishes!`;
+    hideToast();
+    phase = "play";
+    updateCaught();
+    lastWhole = TIME_LIMIT;
+    timerEl.classList.remove("hurry");
+    roundStart = performance.now();
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(tick);
+  }
+
+  // ---------- Suck-into-whirlpool animation ----------
+  const drain = $("drain");
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const canAnimate = typeof Element !== "undefined" && "animate" in Element.prototype;
+
+  // Lift each group out of the pond into a fixed-position copy so it can fly across the screen
+  function liftGroup(g) {
+    const r = g.el.getBoundingClientRect();
+    const w = g.el.offsetWidth, h = g.el.offsetHeight;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const clone = g.el.cloneNode(true);
+    clone.classList.add("flying");
+    Object.assign(clone.style, { left: (cx - w / 2) + "px", top: (cy - h / 2) + "px", width: w + "px", height: h + "px" });
+    document.body.appendChild(clone);
+    g.el.style.visibility = "hidden";
+    g.clone = clone;
+    return { cx, cy };
+  }
+
+  function suckKeyframes(dx, dy) {
+    // Curved, spinning path that shrinks into the whirlpool
+    return [
+      { transform: "translate(0,0) scale(1.05) rotate(0deg)", opacity: 1 },
+      { transform: `translate(${dx * .15}px,${dy * .45}px) scale(.85) rotate(160deg)`, opacity: 1, offset: .35 },
+      { transform: `translate(${dx * .7}px,${dy * .85}px) scale(.45) rotate(460deg)`, opacity: 1, offset: .72 },
+      { transform: `translate(${dx}px,${dy}px) scale(.04) rotate(760deg)`, opacity: 0 }
+    ];
+  }
+
+  async function suckAway(sel) {
+    if (!canAnimate || !sel.length) return;
+    drain.classList.add("show");
+    await wait(250);
+    drain.classList.add("gulp");
+    sfx.suck();
+    const d = drain.getBoundingClientRect();
+    const tx = d.left + d.width / 2, ty = d.top + d.height / 2;
+    const done = sel.map((g, i) => {
+      const { cx, cy } = liftGroup(g);
+      g.dx = tx - cx; g.dy = ty - cy;
+      return g.clone.animate(suckKeyframes(g.dx, g.dy), {
+        duration: 1000, delay: i * 120,
+        easing: "cubic-bezier(.45,0,.85,.55)", fill: "forwards"
+      }).finished;
+    });
+    await Promise.all(done);
+    drain.classList.remove("gulp");
+  }
+
+  async function spitBack(sel) {
+    if (!canAnimate || !sel.length) return;
+    drain.classList.add("gulp");
+    sfx.pop();
+    const done = sel.map((g, i) => {
+      const kf = suckKeyframes(g.dx, g.dy).reverse().map(k => ({ transform: k.transform, opacity: k.opacity }));
+      return g.clone.animate(kf, {
+        duration: 650, delay: i * 80,
+        easing: "cubic-bezier(.2,.7,.3,1.2)", fill: "forwards"
+      }).finished;
+    });
+    await Promise.all(done);
+    sel.forEach(g => { g.clone.remove(); g.clone = null; g.el.style.visibility = ""; });
+    drain.classList.remove("gulp", "show");
+  }
+
+  function hideDrain() { drain.classList.remove("gulp", "show"); }
+
+  async function finishRound(timedOut) {
+    phase = "feedback";
+    cancelAnimationFrame(rafId);
+    timerEl.classList.remove("hurry");
+    catchBtn.disabled = true;
+    groups.forEach(g => g.el.classList.add("locked"));
+
+    const sel = selectedGroups();
+    const correct = !timedOut && sel.length === x && sel.every(g => g.size === y);
+    results.push(correct);
+
+    // Catch pressed: the netted groups get sucked into the whirlpool
+    if (!timedOut) await suckAway(sel);
+
+    if (correct) {
+      hideDrain();
+      sel.forEach(g => { if (g.clone) { g.clone.remove(); g.clone = null; } });
+    } else if (!timedOut) {
+      // Wrong answer: the whirlpool spits the fish back out so the child can see the mistake
+      await wait(200);
+      await spitBack(sel);
+    }
+
+    if (correct) {
+      score++;
+      scoreLabel.textContent = "⭐ Correct: " + score;
+      sfx.good();
+      sel.forEach(g => { g.el.classList.remove("selected"); g.el.classList.add("show-correct"); });
+      showToast(`🎉 Well done!<small>${x} groups of ${y} = ${x} × ${y} = ${x * y} fishes</small>`, "good");
+    } else {
+      sfx.bad();
+      let why;
+      const wrongSize = sel.filter(g => g.size !== y);
+      if (timedOut) why = "⏰ Time's up!";
+      else if (wrongSize.length) why = `Oops! Some groups don't have ${y} fishes.`;
+      else why = `Oops! You caught ${plural(sel.length, "group")}. You need ${x}.`;
+      // Reveal: wrong picks in red, all groups of the right size in green
+      wrongSize.forEach(g => { g.el.classList.remove("selected"); g.el.classList.add("show-wrong"); });
+      groups.filter(g => g.size === y).forEach(g => { g.el.classList.remove("selected"); g.el.classList.add("show-correct"); });
+      showToast(`${why}<small>Green groups have ${y} fishes. ${x} × ${y} = ${x * y}</small>`, "bad");
+    }
+
+    clearTimeout(nextTimeout);
+    nextTimeout = setTimeout(() => {
+      if (round >= ROUNDS) endGame(); else startRound();
+    }, correct ? 2200 : 3200);
+  }
+
+  function showToast(html, kind) {
+    toast.innerHTML = html;
+    toast.className = "show " + kind;
+  }
+  function hideToast() { toast.className = ""; }
+
+  // ---------- Start / End ----------
+  function startGame() {
+    initAudio();
+    round = 0; score = 0; results = [];
+    scoreLabel.textContent = "⭐ Correct: 0";
+    startScreen.classList.add("hidden");
+    endScreen.classList.add("hidden");
+    startRound();
+  }
+
+  function starsFor(s) { return s >= 9 ? 3 : s >= 7 ? 2 : s >= 5 ? 1 : 0; }
+
+  function endGame() {
+    phase = "idle";
+    hideToast();
+    const stars = starsFor(score);
+    const titles = ["Keep practising!", "Good try!", "Great job!", "Amazing! Fish Master!"];
+    $("endTitle").textContent = titles[stars];
+    $("endText").innerHTML = `You got <b>${score}</b> out of <b>${ROUNDS}</b> correct.`;
+    const starBox = $("stars");
+    starBox.innerHTML = "";
+    for (let i = 0; i < 3; i++) {
+      const s = document.createElement("span");
+      s.textContent = "⭐";
+      if (i >= stars) s.classList.add("off");
+      starBox.appendChild(s);
+      setTimeout(() => s.classList.add("pop"), 300 + i * 350);
+    }
+    const dots = $("roundDots");
+    dots.innerHTML = "";
+    results.forEach((r, i) => {
+      const d = document.createElement("div");
+      d.className = r ? "dot-good" : "dot-bad";
+      d.textContent = r ? "✓" : "✗";
+      d.title = "Round " + (i + 1);
+      dots.appendChild(d);
+    });
+    endScreen.classList.remove("hidden");
+    if (stars > 0) sfx.win();
+  }
+
+  $("startBtn").addEventListener("click", startGame);
+  $("againBtn").addEventListener("click", startGame);
+
+  // Stop iPad pinch-zoom / double-tap zoom getting in the way
+  // (double-tap zoom is already disabled via CSS touch-action: manipulation)
+  document.addEventListener("gesturestart", e => e.preventDefault());
+})();
+</script>
+</body>
+</html>
